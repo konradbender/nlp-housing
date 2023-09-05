@@ -161,3 +161,8 @@ cython_debug/
 
 data/
 .DS_Store
+
+# specific data files
+*.csv
+*.json
+*.jsonl
