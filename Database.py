@@ -57,16 +57,21 @@ class House(TypedDict):
             return cursor
 
 
-class CollectionWrapper:
+class PineConeWrap:
     
-    def __init__(self) -> None:
+    def __init__(self, key, env, index) -> None:
         load_dotenv()
         pinecone.init(      
-            api_key=os.getenv("PINCECONE_KEY"),      
-            environment='us-west1-gcp-free'      
+            api_key=key,      
+            environment=env,      
         )      
-        self._index = pinecone.Index('paki-housing')
+        self._index = pinecone.Index(index, pool_threads=10)
         
     def query(self, top_k, vector, filter):
         return self._index.query(top_k=top_k, vector=vector, filter=filter)
+    
+    @property
+    def index(self):
+        return self._index
+        
         
