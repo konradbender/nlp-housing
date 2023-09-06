@@ -67,11 +67,30 @@ class PineConeWrap:
         )      
         self._index = pinecone.Index(index, pool_threads=10)
         
-    def query(self, top_k, vector, filter):
-        return self._index.query(top_k=top_k, vector=vector, filter=filter)
+    def query(self, top_k, vector, filter, *args, **kwargs):
+        """
+        Query database for top k most similar vector to vector
+
+        Parameters
+        ----------
+        top_k : int
+            How many results to return
+        vector : List[int]
+            vector to query similar vectors for
+        filter : _type_
+            Mongo DB like filter-json
+
+        Returns
+        -------
+        # TODO: What is the return type?
+        _type_
+            _description_
+        """
+        return self._index.query(top_k=top_k, vector=vector, filter=filter, *args, **kwargs)
     
     @property
     def index(self):
+        # remove this soon
         return self._index
         
         

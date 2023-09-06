@@ -3,6 +3,8 @@ import time
 import openai
 import os
 import pinecone
+import streamlit as st
+from Database import PineConeWrap
 
 # Initialize debounce variables
 last_call_time = 0
@@ -41,17 +43,34 @@ def debounce_replicate_run(llm, prompt, max_len, temperature, top_p, API_TOKEN):
     return output
 
 
-def find_top_k_houses(
-    openai_key, openai_model, pc_index, pc_env, pc_key, user_description, city, top_k
-):
-    # TODO assert user description not too long
+def embed_query(query):
+    openai_key = st.session_state["OPENAI_API_KEY"]
+    openai_model = st.session_state["OPENAI_MODEL"] 
+
     openai.api_key = openai_key
 
-    pinecone.init(api_key=pc_key, environment=pc_env)
-    index = pinecone.Index(index_name=pc_index)
     embedded_query = openai.Embedding.create(
-        input=[user_description], model=openai_model
+        input=[query], model=openai_model
     )["data"][0]["embedding"]
+    
+    return embedded_query
+
+
+def find_top_k_houses(
+    user_description, city, top_k
+):
+    
+    pc_index = st.session_state["PINECONE_INDEX_NAME"] 
+    pc_env = st.session_state["PINECONE_ENV"]
+    pc_key = st.session_state["PINECONE_KEY"]
+       
+    index = PineConeWrap(pc_key, pc_env, pc_index)
+    
+    embedded_query = embed_query(user_description)
+    
+    if not embed_query:
+        st.warning("Description could not be embedded. Please try again.")
+        return None
 
     query_response = index.query(
         top_k=top_k,
@@ -61,10 +80,5 @@ def find_top_k_houses(
         filter={"city": {"$eq": city}},
     )
 
-    result_string = ""
-
-    for i, result in enumerate(query_response["matches"]):
-        result_string += result["id"] + ":\n" + \
-                result["metadata"]["description"]+  "\n\n"
         
-    return result_string
+    return query_response

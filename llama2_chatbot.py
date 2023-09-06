@@ -18,7 +18,7 @@ import replicate
 from dotenv import load_dotenv
 load_dotenv()
 import os
-from utils import find_top_k_houses
+from app_utils import find_top_k_houses
 
 # feel free to replace with your own logo
 logo1 = 'https://storage.googleapis.com/llama2_release/a16z_logo.png'
@@ -37,68 +37,47 @@ custom_css = """
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-@st.cache_data
-def load_data():
-    # TODO load data from pinecone
-    pass
-
-st.sidebar.header("Paki Housing Chatbot")#Left sidebar menu
+st.sidebar.header("Paki Housing Search Engine")#Left sidebar menu
 st.sidebar.markdown('**made by Konrad B.**')
-st.sidebar.markdown('**(Chatbot UI not associated with Meta Platforms, Inc)**')
-
-#Set config for a cleaner menu, footer & background:
-hide_streamlit_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            </style>
-            """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 
-PINECONE_ENV=os.environ.get('PINECONE_ENV')
-PINECONE_API_KEY=os.environ.get('PINECONE_API_KEY')
-PINECONE_INDEX_NAME=os.environ.get("PINECONE_INDEX_NAME")
-OPENAPI_KEY=os.environ.get("OPENAPI_KEY")
-OPENAI_MODEL=os.environ.get("OPENAI_MODEL")
+st.session_state["PINECONE_ENV"] = os.environ.get('PINECONE_ENV')
+st.session_state["PINECONE_KEY"] = os.environ.get('PINECONE_KEY')
+st.session_state["PINECONE_INDEX_NAME"] = os.environ.get("PINCEONE_INDEX")
+st.session_state["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY")
+st.session_state["OPENAI_MODEL"] = os.environ.get("OPENAI_EMBEDDING_MODEL")
 
 
-if not (PINECONE_API_KEY and PINECONE_ENV and PINECONE_INDEX_NAME and OPENAPI_KEY):
+if not (
+    st.session_state["PINECONE_ENV"] and
+    st.session_state["PINECONE_KEY"] and
+    st.session_state["PINECONE_INDEX_NAME"] and
+    st.session_state["OPENAI_API_KEY"] and
+    st.session_state["OPENAI_MODEL"] 
+):
     st.warning("Add a `.env` file to your app directory with the keys specified in `.env_template` to continue.")
     st.stop()
 
-#container for the chat history
-response_container = st.container()
-#container for the user's text input
-container = st.container()
+
 #Set up/Initialize Session State variables:
-if 'chat_dialogue' not in st.session_state:
-    st.session_state['chat_dialogue'] = []
 if 'string_dialogue' not in st.session_state:
     st.session_state['string_dialogue'] = ''
-
 if 'city' not in st.session_state:
     st.session_state['city'] = 'Lahore'
 if 'n_results' not in st.session_state:
     st.session_state['n_results'] = 3
-
-
-selected_city = st.sidebar.selectbox('Choose a City:', ['Lahore', 'Karachi', 'Islamabad'], key='city_select')
-st.session_state['city'] = selected_city
-
-#Model hyper parameters:
-st.session_state['n_results'] = st.sidebar.slider('N Results:', min_value=1, max_value=5, value=3, step=1)
-
-
-# Add the "Clear Chat History" button to the sidebar
-clear_chat_history_button = st.sidebar.button("Clear Chat History")
-
-# Check if the button is clicked
-if clear_chat_history_button:
-    # Reset the chat history stored in the session state
-    st.session_state['chat_dialogue'] = []
+if 'max_price' not in st.session_state:
+    st.session_state['max_price'] = 1e7
     
-    
+
+st.sidebar.selectbox('Choose a City:', ['Lahore', 'Karachi', 'Islamabad'], key='city')
+
+# Search filter
+st.sidebar.slider('N Results:', min_value=1, max_value=5, step=1, key='n_results')
+st.sidebar.slider('Max Price', min_value=1, max_value=int(1e7), step=int(1e3), key='max_price')
+
+
+
 # add links to relevant resources for users to select
 text1 = 'Chatbot Demo Code' 
 text2 = 'Model from OpenaI' 
@@ -137,39 +116,35 @@ st.sidebar.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-
-# Display chat messages from history on app rerun
-for message in st.session_state.chat_dialogue:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
 # Accept user input
-if prompt := st.chat_input(f"Type the description of your dream house in {st.session_state['city']}"):
-    # Add user message to chat history
-    st.session_state.chat_dialogue.append({"role": "user", "content": prompt})
-    # Display user message in chat message container
-    with st.chat_message("user"):
-        st.markdown(prompt)
+text_search = st.text_input(f"Type the description of your dream house in {st.session_state['city']}")
+
+if text_search:
+    # do not display user input in main window, because it will be still visible in the text input
+    output = find_top_k_houses(
+        text_search,
+        city=st.session_state['city'],
+        top_k=st.session_state['n_results'],
+    )
+    if not output:
+        st.markdown(f"Sorry, I couldn't find any houses in {st.session_state['city']} that match your description.")
+            
+        st.markdown(f"Here are the top {st.session_state['n_results']} houses in {st.session_state['city']} that match your description:\n\n")
     
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        print (prompt)
-        output = find_top_k_houses(
-            OPENAPI_KEY,
-            OPENAI_MODEL,
-            PINECONE_INDEX_NAME,
-            PINECONE_ENV,
-            PINECONE_API_KEY,
-            prompt,
-            city=st.session_state['city'],
-            top_k=st.session_state['n_results'],
-        )
-        full_response = f"Here are the top {st.session_state['n_results']} houses in {st.session_state['city']} that match your description:\n\n"
-        full_response += "".join(output)
-        message_placeholder.markdown(full_response + "▌")
-        message_placeholder.markdown(full_response)
-    # Add assistant response to chat history
-    st.session_state.chat_dialogue.append({"role": "assistant", "content": full_response})
+    for i, result in enumerate(output["matches"]):
+        st.subheader(f'House {i+1}')
+        col1, col2, col3, col4 = st.columns(4, gap="small")
+        col1.metric("Beds", int(result["metadata"]["bedrooms"]), delta=None, delta_color="normal", help=None, label_visibility="visible")
+    
+        col2.metric("Baths", int(result["metadata"]["baths"]), delta=None, delta_color="normal", help=None, label_visibility="visible")
+    
+        col3.metric("Price", f'{int(result["metadata"]["price"]/1e3)} K', delta=None, delta_color="normal", help=None, label_visibility="visible")
+    
+        col4.metric("Area", result["metadata"]["area"], delta=None, delta_color="normal", help=None, label_visibility="visible")
+            
+        st.markdown(f'**Description**: {result["metadata"]["GPT-Description"]} \n')
+else:
+    pass
 
 
 
