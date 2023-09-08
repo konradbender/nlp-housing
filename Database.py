@@ -59,13 +59,13 @@ class House(TypedDict):
 
 class PineConeWrap:
     
-    def __init__(self, key, env, index) -> None:
+    def __init__(self, key, env, index, threads=1) -> None:
         load_dotenv()
         pinecone.init(      
             api_key=key,      
             environment=env,      
         )      
-        self._index = pinecone.Index(index, pool_threads=10)
+        self._index = pinecone.Index(index, pool_threads=threads)
         
     def query(self, top_k, vector, filter, *args, **kwargs):
         """
@@ -77,16 +77,19 @@ class PineConeWrap:
             How many results to return
         vector : List[int]
             vector to query similar vectors for
-        filter : _type_
+        filter : dict
             Mongo DB like filter-json
 
         Returns
         -------
-        # TODO: What is the return type?
-        _type_
-            _description_
+        pinecone.core.client.model.query_response.QueryResponse
+            The Pineconeresponse from the query
         """
-        return self._index.query(top_k=top_k, vector=vector, filter=filter, *args, **kwargs)
+        result = self._index.query(top_k=top_k, vector=vector, filter=filter, *args, **kwargs)
+        if result and "matches" in result:
+            return [x.to_dict() for x in result["matches"]]#
+        else:
+            return None
     
     @property
     def index(self):
